@@ -7,10 +7,10 @@
 KUBECONFIG ?= $(HOME)/cuda-play/CWKubeconfig_new-cluster
 export KUBECONFIG
 
-# Default vLLM deployment
+# Default vLLM deployment (VLLM_MODEL avoids clashing with parent .env MODEL)
 VLLM_POD ?= vllm-qwen
 VLLM_YAML ?= vllm-qwen.yaml
-MODEL ?= Qwen/Qwen2.5-1.5B-Instruct
+VLLM_MODEL ?= Qwen/Qwen2.5-1.5B-Instruct
 
 .PHONY: apply forward start query test help
 
@@ -38,11 +38,11 @@ start: apply
 
 # Send a completion request (requires port-forward)
 query:
-	@MODEL="$(MODEL)" PROMPT="$(PROMPT)" python3 query.py
+	@MODEL="$(VLLM_MODEL)" PROMPT="$(PROMPT)" python3 query.py
 
 # Smoke test: send request, verify response
 test:
-	@MODEL="$(MODEL)" ./test_smoke.sh
+	@MODEL="$(VLLM_MODEL)" ./test_smoke.sh
 
 help:
 	@echo "runllm - Run vLLM on Kubernetes"
@@ -53,4 +53,4 @@ help:
 	@echo "  make apply     - Deploy pod only"
 	@echo "  make forward   - Port-forward only (blocks; run in separate terminal)"
 	@echo ""
-	@echo "Config: VLLM_YAML=vllm-qwen.yaml, MODEL=$(MODEL)"
+	@echo "Config: VLLM_YAML=vllm-qwen.yaml, VLLM_MODEL=$(VLLM_MODEL)"
