@@ -22,19 +22,23 @@ forward:
 	@echo "Query with: make query PROMPT=\"Your prompt\""
 	kubectl port-forward $(VLLM_POD) 8000:8000
 
-# One-shot: deploy, wait for pod, background forward, wait for health
+# One-shot: deploy, wait for pod, wait for vLLM health (via exec), then port-forward
 start: apply
 	@echo "Waiting for pod Ready..."
 	@kubectl wait --for=condition=Ready pod/$(VLLM_POD) --timeout=600s 2>/dev/null || true
+	@echo "Waiting for vLLM to listen (may take 1-2 min)..."
+	@for i in $$(seq 1 90); do \
+		kubectl exec $(VLLM_POD) -- curl -sf http://localhost:8000/health >/dev/null 2>&1 && break; \
+		[ $$i -eq 90 ] && { echo "Timeout. Check: kubectl logs -f $(VLLM_POD)"; exit 1; }; \
+		sleep 2; \
+	done
 	@pkill -f "kubectl port-forward $(VLLM_POD)" 2>/dev/null || true
 	@sleep 2
 	@echo "Starting port-forward (background)..."
-	@kubectl port-forward $(VLLM_POD) 8000:8000 & PF_PID=$$!; \
-	for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15; do \
-		curl -sf http://localhost:8000/health >/dev/null 2>&1 && { echo "Ready at http://localhost:8000"; echo "Run: make query PROMPT=\"Hello\""; exit 0; }; \
-		sleep 2; \
-	done; \
-	kill $$PF_PID 2>/dev/null; echo "Timeout: model not ready. Check pod with: kubectl logs -f $(VLLM_POD)"; exit 1
+	@kubectl port-forward $(VLLM_POD) 8000:8000 &
+	@sleep 2
+	@echo "Ready at http://localhost:8000"
+	@echo "Run: make query PROMPT=\"Hello\""
 
 # Send a completion request (requires port-forward)
 query:
