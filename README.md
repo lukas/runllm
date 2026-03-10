@@ -30,4 +30,4 @@ make test                     # Smoke test
 - `vllm-qwen.yaml` – Qwen2.5-1.5B-Instruct (1 GPU)
 - `vllm-kimi.yaml` – Kimi-K2.5 (8 GPUs, TP=8)
 
-Edit the YAML to change model, args, or resources.
+Edit the YAML to change model, args, or resources. Override with `VLLM_MODEL=...` if the served model differs from the default.
