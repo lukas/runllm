@@ -1,19 +1,29 @@
 # runllm
 
-Run vLLM models on Kubernetes. Deploy, port-forward, and test.
+Run vLLM models on Kubernetes. Deploy, port-forward, and query.
 
 ## Setup
 
 1. Set `KUBECONFIG` to your cluster config.
 2. Ensure the `hf-token` secret exists for gated models.
 
-## Usage
+## Quick start
 
 ```bash
-make apply          # Deploy vLLM pod
-make forward        # Port-forward localhost:8000 → vllm-qwen:8000 (run in separate terminal)
-make test           # Send a test request
+make start                    # Deploy + port-forward (one command)
+make query PROMPT="Hello"     # Send a prompt
+make test                     # Smoke test
 ```
+
+## Commands
+
+| Command | Description |
+|---------|-------------|
+| `make start` | Deploy pod, wait for ready, start port-forward (background) |
+| `make query PROMPT="..."` | Send completion request |
+| `make test` | Smoke test (verifies model responds) |
+| `make apply` | Deploy only |
+| `make forward` | Port-forward only (blocks; run in separate terminal) |
 
 ## Config
 
