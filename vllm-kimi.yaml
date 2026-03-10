@@ -1,0 +1,44 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: vllm-kimi
+spec:
+  restartPolicy: Always
+  hostIPC: true
+  nodeSelector:
+    compute.coreweave.com/node-pool: lukas-4h200-pool
+  containers:
+    - name: vllm
+      image: vllm/vllm-openai:nightly
+      env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+      args:
+        - "--model"
+        - "moonshotai/Kimi-K2.5"
+        - "--tensor-parallel-size"
+        - "8"
+        - "--trust-remote-code"
+        - "--mm-encoder-tp-mode"
+        - "data"
+        - "--tool-call-parser"
+        - "kimi_k2"
+        - "--reasoning-parser"
+        - "kimi_k2"
+        - "--enable-auto-tool-choice"
+        - "--max-model-len"
+        - "8192"
+        - "--gpu-memory-utilization"
+        - "0.9"
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+      ports:
+        - containerPort: 8000
+  volumes:
+    - name: workspace
+      persistentVolumeClaim:
+        claimName: cuda-workspace
