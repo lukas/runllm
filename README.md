@@ -42,3 +42,5 @@ Edit the YAML to change model, args, or resources. Override with `VLLM_MODEL=...
 ## Used by autollm
 
 When used as a submodule inside [autollm](../), the Makefile inherits `KUBECONFIG` from the parent. The `make start` flow (deploy, health check, sample query, port-forward) is also called by autollm's benchmark harness.
+
+During sweep runs, autollm copies `runllm/` into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified by the agent. Each run also produces a `RETRO.md` with lessons learned for future optimization agents.
