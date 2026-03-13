@@ -32,9 +32,12 @@ start: apply
 	@echo "Waiting for vLLM to listen (may take 1-2 min)..."
 	@for i in $$(seq 1 90); do \
 		kubectl exec $(VLLM_POD) -- curl -sf http://localhost:8000/health >/dev/null 2>&1 && break; \
-		[ $$i -eq 90 ] && { echo "Timeout. Check: kubectl logs -f $(VLLM_POD)"; exit 1; }; \
+		[ $$i -eq 90 ] && { echo "\nTimeout after 3 min. Check: kubectl logs -f $(VLLM_POD)"; exit 1; }; \
+		elapsed=$$((i * 2)); \
+		printf "\r  [%3ds] waiting for /health..." "$$elapsed"; \
 		sleep 2; \
 	done
+	@echo ""
 	@echo "Running sample query (30s timeout)..."
 	@payload='{"model":"$(VLLM_MODEL)","messages":[{"role":"user","content":"Say hi"}],"max_tokens":16}'; \
 	kubectl exec $(VLLM_POD) -- curl -sf -X POST http://localhost:8000/v1/chat/completions \

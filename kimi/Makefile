@@ -30,11 +30,18 @@ start: apply
 	@echo "Waiting for pod Ready..."
 	@kubectl wait --for=condition=Ready pod/$(VLLM_POD) --timeout=600s 2>/dev/null || true
 	@echo "Waiting for vLLM to listen (large model — may take 5-10 min)..."
-	@for i in $$(seq 1 300); do \
+	@echo "Streaming pod logs while waiting..."
+	@kubectl logs -f $(VLLM_POD) --tail=5 2>/dev/null &\
+	LOGPID=$$!; \
+	for i in $$(seq 1 300); do \
 		kubectl exec $(VLLM_POD) -- curl -sf http://localhost:8000/health >/dev/null 2>&1 && break; \
-		[ $$i -eq 300 ] && { echo "Timeout after 10 min. Check: kubectl logs -f $(VLLM_POD)"; exit 1; }; \
+		[ $$i -eq 300 ] && { kill $$LOGPID 2>/dev/null; echo "Timeout after 10 min."; exit 1; }; \
 		sleep 2; \
-	done
+	done; \
+	kill $$LOGPID 2>/dev/null || true; \
+	wait $$LOGPID 2>/dev/null || true
+	@echo ""
+	@echo "vLLM is healthy."
 	@echo "Running sample query (60s timeout)..."
 	@payload='{"model":"$(VLLM_MODEL)","messages":[{"role":"user","content":"Say hi"}],"max_tokens":16}'; \
 	kubectl exec $(VLLM_POD) -- curl -sf -X POST http://localhost:8000/v1/chat/completions \
