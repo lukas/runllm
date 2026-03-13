@@ -47,6 +47,29 @@ make start                    # Deploy Qwen3-235B-A22B on 4× GPU
 | `make forward` | Port-forward only (blocks; run in separate terminal) |
 | `make delete-pod` | Delete the vLLM pod |
 
+## Tensorizer (fast model loading)
+
+Large models (Qwen3-235B, Kimi-K2.5) use [Tensorizer](https://github.com/coreweave/tensorizer) to pre-serialize weights to a shared PVC (`tensorized-models`). This cuts startup time dramatically — loading pre-serialized tensors from local NVMe is much faster than downloading safetensors from HuggingFace Hub on every pod start.
+
+**One-time setup:** Run the serialize job to write tensors to the PVC:
+
+```bash
+kubectl apply -f tensorized-models-pvc.yaml       # create PVC (once)
+kubectl apply -f qwen3-235b/serialize-job.yaml     # serialize model weights
+```
+
+The job downloads the model from HF, serializes it with tensor-parallel sharding, and writes the result to `/mnt/tensorized/`. Subsequent pod starts mount that PVC read-only and pass `--load-format tensorizer` to vLLM.
+
+### Runtime patches for MoE models
+
+The latest vLLM nightly has two bugs that break tensorizer loading for Mixture-of-Experts models. The `vllm-config.yaml` for affected models (qwen3-235b, kimi) applies two inline patches at container startup:
+
+1. **Patch 1 — MetaTensorMode factory ops** (vllm#25751): vLLM's `MetaTensorMode` only intercepts `aten::empty`, but MoE layers use other tensor factory ops (`aten::zeros`, `aten::ones`, `aten::full`, etc.). Without this patch, model initialization crashes because those ops try to allocate on the wrong device. The patch expands the intercept list to 18 factory ops.
+
+2. **Patch 2 — process_weights_after_loading**: vLLM's `TensorizerLoader` skips `process_weights_after_loading` after deserializing weights. For MoE models this step is required — it initializes the fused MoE kernels and converts weight layouts. Without it the model loads but produces garbage output. The patch adds the missing call.
+
+These patches are applied via `sed`/`python3` at startup and are idempotent (safe to re-run). They should be removed once upstream vLLM fixes land.
+
 ## Adding a new model
 
 1. Create a new directory: `mkdir runllm/my-model`

@@ -11,7 +11,7 @@ VLLM_POD ?= vllm-qwen
 VLLM_YAML ?= vllm-config.yaml
 VLLM_MODEL ?= Qwen/Qwen2.5-1.5B-Instruct
 
-.PHONY: apply delete-pod forward start query test help
+.PHONY: apply delete-pod forward start query test help tensorize tensorize-status
 
 delete-pod:
 	kubectl delete pod $(VLLM_POD) --ignore-not-found=true
@@ -57,6 +57,17 @@ query:
 
 test:
 	@MODEL="$(VLLM_MODEL)" ./test_smoke.sh
+
+tensorize:
+	kubectl delete job tensorize-qwen-small --ignore-not-found=true
+	kubectl apply -f serialize-job.yaml
+	@echo "Serialization job started. Monitor with: make tensorize-status"
+	@echo "Or: kubectl logs -f job/tensorize-qwen-small"
+
+tensorize-status:
+	@kubectl get job tensorize-qwen-small -o wide 2>/dev/null || echo "Job not found"
+	@echo "---"
+	@kubectl logs job/tensorize-qwen-small --tail=20 2>/dev/null || true
 
 help:
 	@echo "runllm/qwen2.5-1.5b — Qwen2.5-1.5B-Instruct (1× GPU)"

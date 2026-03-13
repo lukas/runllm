@@ -1,0 +1,56 @@
+# One-time job: serialize Qwen2.5-1.5B-Instruct to PVC via Tensorizer.
+# Prereqs:
+#   kubectl apply -f ../tensorized-models-pvc.yaml
+#
+# Run:  kubectl apply -f serialize-job.yaml
+# Logs: kubectl logs -f job/tensorize-qwen-small
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tensorize-qwen-small
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      restartPolicy: Never
+      nodeSelector:
+        compute.coreweave.com/node-pool: lukas-4h200-pool
+      containers:
+        - name: tensorize
+          image: vllm/vllm-openai:nightly
+          env:
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -e
+              MARKER="/mnt/tensorized/vllm/Qwen/Qwen2.5-1.5B-Instruct/v1/model.tensors"
+              if [ -f "$MARKER" ]; then
+                echo "Model already serialized at $MARKER — skipping."
+                exit 0
+              fi
+              pip install 'tensorizer>=2.9.0' -q
+              SCRIPT_URL="https://raw.githubusercontent.com/vllm-project/vllm/main/examples/others/tensorize_vllm_model.py"
+              curl -sL "$SCRIPT_URL" -o /tmp/tensorize_vllm_model.py
+              python3 /tmp/tensorize_vllm_model.py \
+                --model Qwen/Qwen2.5-1.5B-Instruct \
+                --dtype float16 \
+                --tensor-parallel-size 1 \
+                serialize \
+                --serialized-directory /mnt/tensorized \
+                --suffix v1
+          resources:
+            limits:
+              nvidia.com/gpu: 1
+          volumeMounts:
+            - name: tensorized
+              mountPath: /mnt/tensorized
+      volumes:
+        - name: tensorized
+          persistentVolumeClaim:
+            claimName: tensorized-models

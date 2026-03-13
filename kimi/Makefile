@@ -11,7 +11,7 @@ VLLM_POD ?= vllm-kimi
 VLLM_YAML ?= vllm-config.yaml
 VLLM_MODEL ?= moonshotai/Kimi-K2.5
 
-.PHONY: apply delete-pod forward start query test help
+.PHONY: apply delete-pod forward start query test help tensorize tensorize-status
 
 delete-pod:
 	kubectl delete pod $(VLLM_POD) --ignore-not-found=true
@@ -61,6 +61,17 @@ query:
 
 test:
 	@MODEL="$(VLLM_MODEL)" ./test_smoke.sh
+
+tensorize:
+	kubectl delete job tensorize-kimi-k25 --ignore-not-found=true
+	kubectl apply -f serialize-job.yaml
+	@echo "Serialization job started. Monitor with: make tensorize-status"
+	@echo "Or: kubectl logs -f job/tensorize-kimi-k25"
+
+tensorize-status:
+	@kubectl get job tensorize-kimi-k25 -o wide 2>/dev/null || echo "Job not found"
+	@echo "---"
+	@kubectl logs job/tensorize-kimi-k25 --tail=20 2>/dev/null || true
 
 help:
 	@echo "runllm/kimi — Kimi-K2.5 (8× GPU)"
