@@ -1,6 +1,21 @@
 # runllm
 
-Run vLLM models on Kubernetes. Deploy, port-forward, send chat-completions queries, and verify.
+Run vLLM models on Kubernetes. Each model has a self-contained subdirectory.
+
+## Structure
+
+```
+runllm/
+  qwen2.5-1.5b/    Qwen2.5-1.5B-Instruct (1× GPU)
+  qwen3-235b/       Qwen3-235B-A22B MoE (4× GPU)
+  kimi/              Kimi-K2.5 (8× GPU)
+```
+
+Each directory contains:
+- `vllm-config.yaml` — K8s Pod spec
+- `Makefile` — deploy, port-forward, query, test
+- `query.py` — send chat completion requests
+- `test_smoke.sh` — smoke test
 
 ## Setup
 
@@ -10,12 +25,18 @@ Run vLLM models on Kubernetes. Deploy, port-forward, send chat-completions queri
 ## Quick start
 
 ```bash
+cd qwen2.5-1.5b
 make start                    # Deploy + wait for ready + sample query + port-forward
 make query PROMPT="Hello"     # Send a prompt
 make test                     # Smoke test
 ```
 
-## Commands
+```bash
+cd qwen3-235b
+make start                    # Deploy Qwen3-235B-A22B on 4× GPU
+```
+
+## Commands (same in every model directory)
 
 | Command | Description |
 |---------|-------------|
@@ -26,21 +47,14 @@ make test                     # Smoke test
 | `make forward` | Port-forward only (blocks; run in separate terminal) |
 | `make delete-pod` | Delete the vLLM pod |
 
-## Config
+## Adding a new model
 
-- `vllm-qwen.yaml` - Qwen2.5-1.5B-Instruct (1x GPU, nightly image)
-- `vllm-kimi.yaml` - Kimi-K2.5 (8x GPUs, TP=8)
-
-Edit the YAML to change model, args, or resources. Override with `VLLM_MODEL=...` if the served model name differs from the default.
-
-## Kubeconfig behavior
-
-- `runllm/Makefile` respects an already-exported `KUBECONFIG`.
-- When used inside `autollm`, it defaults to `../kubeconfig`.
-- For standalone usage, export `KUBECONFIG=/path/to/your/config` before running `make start`.
+1. Create a new directory: `mkdir runllm/my-model`
+2. Add `vllm-config.yaml` with the K8s Pod spec (set `metadata.name`, model args, GPU count)
+3. Copy `Makefile`, `query.py`, `test_smoke.sh` from an existing model dir
+4. Update Makefile defaults: `VLLM_POD`, `VLLM_MODEL`
+5. Test: `cd runllm/my-model && make start`
 
 ## Used by autollm
 
-When used as a submodule inside [autollm](../), the Makefile inherits `KUBECONFIG` from the parent. The `make start` flow (deploy, health check, sample query, port-forward) is also called by autollm's benchmark harness.
-
-During sweep runs, autollm copies `runllm/` into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified by the agent. Each run also produces a `RETRO.md` with lessons learned for future optimization agents.
+When used as a submodule inside [autollm](../), the Makefile inherits `KUBECONFIG` from the parent. During sweep runs, autollm copies the chosen model directory into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified.
