@@ -80,4 +80,4 @@ These patches are applied via `sed`/`python3` at startup and are idempotent (saf
 
 ## Used by autollm
 
-When used as a submodule inside [autollm](../), the Makefile inherits `KUBECONFIG` from the parent. During sweep runs, autollm copies the chosen model directory into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified.
+The parent [autollm](https://github.com/lukas/autollm) repo uses `runllm/` as a submodule. The Makefile inherits `KUBECONFIG` from autollm. During sweep runs, autollm copies the chosen model directory into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified.
