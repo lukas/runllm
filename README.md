@@ -10,6 +10,7 @@ runllm/
   qwen2.5-1.5b-sglang/ Qwen2.5-1.5B-Instruct on SGLang (1× GPU)
   qwen3-235b/       Qwen3-235B-A22B MoE (4× GPU)
   kimi/              Kimi-K2.5 (8× GPU)
+  kimi-sglang/       Kimi-K2.5 on SGLang (8× GPU)
 ```
 
 Each directory contains:
@@ -47,6 +48,11 @@ cd kimi
 make start                    # Deploy Kimi-K2.5 on 8× GPU
 ```
 
+```bash
+cd kimi-sglang
+make start                    # Deploy Kimi-K2.5 on SGLang (8× GPU)
+```
+
 ## Commands (same in every model directory)
 
 | Command | Description |
@@ -60,9 +66,9 @@ make start                    # Deploy Kimi-K2.5 on 8× GPU
 
 ## SGLang variant
 
-`qwen2.5-1.5b-sglang/` keeps the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so it can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
+`qwen2.5-1.5b-sglang/` and `kimi-sglang/` keep the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so they can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
 
-For sweeps, `autollm` treats `qwen2.5-1.5b/` and `qwen2.5-1.5b-sglang/` as canonical backend variants of the same model family. A sweep started with `MODEL_DIR=qwen2.5-1.5b` can now switch between the `vllm` and `sglang` templates during improve runs.
+For sweeps, `autollm` treats `*-sglang/` directories as sibling backend variants of the same model family. A sweep started with `MODEL_DIR=qwen2.5-1.5b` or `MODEL_DIR=kimi` can switch between the `vllm` and `sglang` templates during improve runs.
 
 ## Model loading
 
