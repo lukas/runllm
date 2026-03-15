@@ -1,0 +1,40 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sglang-qwen
+spec:
+  restartPolicy: Always
+  nodeSelector:
+    compute.coreweave.com/node-pool: lukas-4h200-pool
+  containers:
+    - name: sglang
+      image: lmsysorg/sglang:latest
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+              optional: true
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+              optional: true
+      command: ["/bin/bash", "-lc"]
+      args:
+        - |
+          exec sglang serve \
+            --model-path Qwen/Qwen2.5-1.5B-Instruct \
+            --served-model-name Qwen/Qwen2.5-1.5B-Instruct \
+            --host 0.0.0.0 \
+            --port 8000 \
+            --context-length 4096 \
+            --mem-fraction-static 0.9 \
+            --dtype half
+      resources:
+        limits:
+          nvidia.com/gpu: 1
+      ports:
+        - containerPort: 8000

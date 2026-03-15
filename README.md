@@ -7,6 +7,7 @@ Run vLLM models on Kubernetes. Each model has a self-contained subdirectory.
 ```
 runllm/
   qwen2.5-1.5b/    Qwen2.5-1.5B-Instruct (1× GPU)
+  qwen2.5-1.5b-sglang/ Qwen2.5-1.5B-Instruct on SGLang (1× GPU)
   qwen3-235b/       Qwen3-235B-A22B MoE (4× GPU)
   kimi/              Kimi-K2.5 (8× GPU)
 ```
@@ -32,8 +33,18 @@ make test                     # Smoke test
 ```
 
 ```bash
+cd qwen2.5-1.5b-sglang
+make start                    # Deploy Qwen2.5-1.5B-Instruct on SGLang
+```
+
+```bash
 cd qwen3-235b
 make start                    # Deploy Qwen3-235B-A22B on 4× GPU
+```
+
+```bash
+cd kimi
+make start                    # Deploy Kimi-K2.5 on 8× GPU
 ```
 
 ## Commands (same in every model directory)
@@ -47,9 +58,15 @@ make start                    # Deploy Qwen3-235B-A22B on 4× GPU
 | `make forward` | Port-forward only (blocks; run in separate terminal) |
 | `make delete-pod` | Delete the vLLM pod |
 
-## Tensorizer (fast model loading)
+## SGLang variant
 
-Large models (Qwen3-235B, Kimi-K2.5) use [Tensorizer](https://github.com/coreweave/tensorizer) to pre-serialize weights to a shared PVC (`tensorized-models`). This cuts startup time dramatically — loading pre-serialized tensors from local NVMe is much faster than downloading safetensors from HuggingFace Hub on every pod start.
+`qwen2.5-1.5b-sglang/` keeps the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so it can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
+
+For sweeps, `autollm` treats `qwen2.5-1.5b/` and `qwen2.5-1.5b-sglang/` as canonical backend variants of the same model family. A sweep started with `MODEL_DIR=qwen2.5-1.5b` can now switch between the `vllm` and `sglang` templates during improve runs.
+
+## Model loading
+
+Large models generally use [Tensorizer](https://github.com/coreweave/tensorizer) to pre-serialize weights to a shared PVC (`tensorized-models`). This cuts startup time dramatically — loading pre-serialized tensors from local NVMe is much faster than downloading safetensors from HuggingFace Hub on every pod start.
 
 **One-time setup:** Run the serialize job to write tensors to the PVC:
 
@@ -60,9 +77,18 @@ kubectl apply -f qwen3-235b/serialize-job.yaml     # serialize model weights
 
 The job downloads the model from HF, serializes it with tensor-parallel sharding, and writes the result to `/mnt/tensorized/`. Subsequent pod starts mount that PVC read-only and pass `--load-format tensorizer` to vLLM.
 
-### Runtime patches for MoE models
+### Kimi-K2.5 exception
 
-The latest vLLM nightly has two bugs that break tensorizer loading for Mixture-of-Experts models. The `vllm-config.yaml` for affected models (qwen3-235b, kimi) applies two inline patches at container startup:
+`kimi/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/tensorized/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
+
+Operational implications:
+- Kimi startup is slower than the tensorized Qwen paths.
+- The shared PVC still matters because it caches the HF safetensors under `/mnt/tensorized/hf-cache`.
+- Benchmarks and sample queries must allow the Kimi tokenizer/processor custom code (`trust_remote_code=True`) to match the serving path.
+
+### Runtime patches for tensorized MoE models
+
+The latest vLLM nightly has two bugs that break tensorizer loading for Mixture-of-Experts models. The `vllm-config.yaml` for affected tensorized models (for example `qwen3-235b/`) applies two inline patches at container startup:
 
 1. **Patch 1 — MetaTensorMode factory ops** (vllm#25751): vLLM's `MetaTensorMode` only intercepts `aten::empty`, but MoE layers use other tensor factory ops (`aten::zeros`, `aten::ones`, `aten::full`, etc.). Without this patch, model initialization crashes because those ops try to allocate on the wrong device. The patch expands the intercept list to 18 factory ops.
 

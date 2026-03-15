@@ -20,51 +20,7 @@ spec:
       args:
         - |
           set -e
-          pip install 'tensorizer>=2.9.0' -q
-
-          # Patch 1 (vllm#25751): expand MetaTensorMode to intercept 18 factory ops
-          TFILE=$(python3 -c "import vllm.model_executor.model_loader.tensorizer as m; import inspect; print(inspect.getfile(m))")
-          if grep -q 'aten::empty" and "device"' "$TFILE" 2>/dev/null; then
-            sed -i '/_schema.name == "aten::empty" and "device" not in kwargs:/c\        if func._schema.name in ("aten::empty","aten::zeros","aten::ones","aten::full","aten::rand","aten::randn","aten::empty_like","aten::zeros_like","aten::ones_like","aten::full_like","aten::rand_like","aten::randn_like","aten::empty_strided","aten::new_empty","aten::new_zeros","aten::new_ones","aten::new_full","aten::new_empty_strided"):' "$TFILE"
-            sed -i 's/kwargs = kwargs or {}/kwargs = kwargs if kwargs is not None else {}/' "$TFILE"
-            echo "[patch-1] MetaTensorMode patched — 18 factory ops intercepted"
-          else
-            echo "[patch-1] MetaTensorMode already patched or different version — skipping"
-          fi
-
-          # Patch 2: TensorizerLoader.load_model skips process_weights_after_loading (MoE kernel init)
-          LFILE=$(python3 -c "import vllm.model_executor.model_loader.tensorizer_loader as m; import inspect; print(inspect.getfile(m))")
-          python3 -c "
-          import sys
-          lfile = sys.argv[1]
-          with open(lfile) as f:
-              code = f.read()
-          changed = False
-          if 'process_weights_after_loading' not in code:
-              code = code.replace(
-                  'from vllm.model_executor.model_loader.utils import (\n    get_model_architecture,\n    initialize_model,\n)',
-                  'from vllm.model_executor.model_loader.utils import (\n    get_model_architecture,\n    initialize_model,\n    process_weights_after_loading,\n)'
-              )
-              changed = True
-          old = '            self.load_weights(model, model_config)\n            return model'
-          new = '            self.load_weights(model, model_config)\n            for p in model.parameters():\n                p.requires_grad_(False)\n            with torch.no_grad():\n                process_weights_after_loading(model, model_config, torch.device(device_config.device))\n            return model.eval()'
-          if old in code and new not in code:
-              if 'import torch\n' not in code:
-                  code = 'import torch\n' + code
-              code = code.replace(old, new)
-              changed = True
-          if changed:
-              with open(lfile, 'w') as f:
-                  f.write(code)
-              print('[patch-2] TensorizerLoader patched — added process_weights_after_loading')
-          else:
-              print('[patch-2] Already patched or different layout — skipping')
-          " "$LFILE"
-
-          exec vllm serve \
-            /mnt/tensorized/vllm/moonshotai/Kimi-K2.5/v1 \
-            --load-format tensorizer \
-            --model-loader-extra-config '{"tensorizer_uri": "/mnt/tensorized/vllm/moonshotai/Kimi-K2.5/v1/model-rank-%03d.tensors"}' \
+          exec vllm serve moonshotai/Kimi-K2.5 \
             --tensor-parallel-size 8 \
             --trust-remote-code \
             --mm-encoder-tp-mode data \
@@ -73,6 +29,7 @@ spec:
             --enable-auto-tool-choice \
             --max-model-len 8192 \
             --gpu-memory-utilization 0.9 \
+            --download-dir /mnt/tensorized/hf-cache \
             --served-model-name moonshotai/Kimi-K2.5
       resources:
         limits:
@@ -82,7 +39,6 @@ spec:
       volumeMounts:
         - name: tensorized
           mountPath: /mnt/tensorized
-          readOnly: true
         - name: workspace
           mountPath: /workspace
   volumes:
