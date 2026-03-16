@@ -27,10 +27,19 @@ req = urllib.request.Request(
 )
 try:
     with urllib.request.urlopen(req, timeout=90) as response:
-        data = json.load(response)
+        response_text = response.read().decode("utf-8", errors="replace")
 except urllib.error.URLError as err:
     print(f"Error: {err}", file=sys.stderr)
     print("Is port-forward running? Run: make forward", file=sys.stderr)
+    sys.exit(1)
+
+try:
+    data = json.loads(response_text)
+except json.JSONDecodeError:
+    print("Error: API server returned invalid JSON.", file=sys.stderr)
+    if response_text.strip():
+        print(response_text.strip(), file=sys.stderr)
+    print("Is the server healthy? Check logs or re-run: make forward", file=sys.stderr)
     sys.exit(1)
 
 choices = data.get("choices") or [{}]

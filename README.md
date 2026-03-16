@@ -70,6 +70,8 @@ make start                    # Deploy Kimi-K2.5 on SGLang (8× GPU)
 
 For sweeps, `autollm` treats `*-sglang/` directories as sibling backend variants of the same model family. A sweep started with `MODEL_DIR=qwen2.5-1.5b` or `MODEL_DIR=kimi` can switch between the `vllm` and `sglang` templates during improve runs.
 
+`kimi-sglang/query.py` now treats non-JSON responses as a query-path bug and prints the raw server response before exiting. This makes broken port-forwards or unhealthy API responses much easier to diagnose than a bare JSON decode failure.
+
 ## Model loading
 
 Large models generally use [Tensorizer](https://github.com/coreweave/tensorizer) to pre-serialize weights to a shared PVC (`tensorized-models`). This cuts startup time dramatically — loading pre-serialized tensors from local NVMe is much faster than downloading safetensors from HuggingFace Hub on every pod start.
@@ -112,4 +114,4 @@ These patches are applied via `sed`/`python3` at startup and are idempotent (saf
 
 ## Used by autollm
 
-The parent [autollm](https://github.com/lukas/autollm) repo uses `runllm/` as a submodule. The Makefile inherits `KUBECONFIG` from autollm. During sweep runs, autollm copies the chosen model directory into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified.
+The parent [autollm](https://github.com/lukas/autollm) repo uses `runllm/` as a submodule. The Makefile inherits `KUBECONFIG` from autollm. During sweep runs, autollm copies the chosen model directory into an isolated per-run directory (`results/sweep-NAME/TIMESTAMP/runllm/`). The agent edits only that copy — the canonical `runllm/` is never modified. Agent conversations and tool calls are recorded in the parent repo's local `agent.log` files; `runllm/` itself remains just the canonical serving configs and query helpers.
