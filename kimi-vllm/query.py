@@ -5,7 +5,7 @@ import os
 import sys
 import urllib.request
 
-MODEL = os.environ.get("MODEL", "Qwen/Qwen2.5-1.5B-Instruct")
+MODEL = os.environ.get("MODEL", "moonshotai/Kimi-K2.5")
 PROMPT = os.environ.get("PROMPT", "")
 URL = "http://localhost:8000/v1/chat/completions"
 

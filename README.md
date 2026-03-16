@@ -9,7 +9,7 @@ runllm/
   qwen2.5-1.5b/    Qwen2.5-1.5B-Instruct (1× GPU)
   qwen2.5-1.5b-sglang/ Qwen2.5-1.5B-Instruct on SGLang (1× GPU)
   qwen3-235b/       Qwen3-235B-A22B MoE (4× GPU)
-  kimi/              Kimi-K2.5 (8× GPU)
+  kimi-vllm/         Kimi-K2.5 on vLLM (8× GPU)
   kimi-sglang/       Kimi-K2.5 on SGLang (8× GPU)
 ```
 
@@ -44,8 +44,8 @@ make start                    # Deploy Qwen3-235B-A22B on 4× GPU
 ```
 
 ```bash
-cd kimi
-make start                    # Deploy Kimi-K2.5 on 8× GPU
+cd kimi-vllm
+make start                    # Deploy Kimi-K2.5 on vLLM (8× GPU)
 ```
 
 ```bash
@@ -68,7 +68,7 @@ make start                    # Deploy Kimi-K2.5 on SGLang (8× GPU)
 
 `qwen2.5-1.5b-sglang/` and `kimi-sglang/` keep the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so they can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
 
-For sweeps, `autollm` treats `*-sglang/` directories as sibling backend variants of the same model family. A sweep started with `MODEL_DIR=qwen2.5-1.5b` or `MODEL_DIR=kimi` can switch between the `vllm` and `sglang` templates during improve runs.
+For sweeps, `autollm` treats explicit backend directories as sibling variants of the same model family. For example, a Kimi family sweep can compare `kimi-vllm/` and `kimi-sglang/` in the same improve loop, and a Qwen 1.5B family sweep can compare `qwen2.5-1.5b/` and `qwen2.5-1.5b-sglang/`.
 
 `kimi-sglang/query.py` now treats non-JSON responses as a query-path bug and prints the raw server response before exiting. This makes broken port-forwards or unhealthy API responses much easier to diagnose than a bare JSON decode failure.
 
@@ -87,7 +87,7 @@ The job downloads the model from HF, serializes it with tensor-parallel sharding
 
 ### Kimi-K2.5 exception
 
-`kimi/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/tensorized/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
+`kimi-vllm/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/tensorized/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working vLLM deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
 
 Operational implications:
 - Kimi startup is slower than the tensorized Qwen paths.

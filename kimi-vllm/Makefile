@@ -1,4 +1,4 @@
-# runllm/kimi — Kimi-K2.5 (8× GPU)
+# runllm/kimi-vllm — Kimi-K2.5 on vLLM (8× GPU)
 # Usage: make start | query | test
 
 -include ../../.env
@@ -74,7 +74,7 @@ tensorize-status:
 	@kubectl logs job/tensorize-kimi-k25 --tail=20 2>/dev/null || true
 
 help:
-	@echo "runllm/kimi — Kimi-K2.5 (8× GPU)"
+	@echo "runllm/kimi-vllm — Kimi-K2.5 on vLLM (8× GPU)"
 	@echo ""
 	@echo "  make start     - Deploy + port-forward"
 	@echo "  make query     - Send chat completion (PROMPT=\"...\" required)"

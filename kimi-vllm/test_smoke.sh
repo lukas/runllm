@@ -2,7 +2,7 @@
 # Smoke test: verify vLLM responds to a chat completion request.
 # Requires port-forward (make forward) or run after make start.
 set -e
-MODEL="${MODEL:-Qwen/Qwen2.5-1.5B-Instruct}"
+MODEL="${MODEL:-moonshotai/Kimi-K2.5}"
 echo "Smoke test: GET health, then chat completion..."
 curl -sf http://localhost:8000/health >/dev/null || { echo "FAIL: /health not reachable. Run: make forward"; exit 1; }
 out=$(curl -sf http://localhost:8000/v1/chat/completions -H "Content-Type: application/json" \
