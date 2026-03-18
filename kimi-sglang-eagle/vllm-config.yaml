@@ -39,6 +39,8 @@ spec:
             --reasoning-parser kimi_k2 \
             --tool-call-parser kimi_k2 \
             --trust-remote-code \
+            --load-format safetensors \
+            --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}' \
             --speculative-algorithm EAGLE3 \
             --speculative-draft-model-path lightseekorg/kimi-k2.5-eagle3 \
             --speculative-num-steps 3 \

@@ -38,7 +38,9 @@ spec:
             --mem-fraction-static 0.9 \
             --reasoning-parser kimi_k2 \
             --tool-call-parser kimi_k2 \
-            --trust-remote-code
+            --trust-remote-code \
+            --load-format safetensors \
+            --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}'
       resources:
         limits:
           nvidia.com/gpu: 8
