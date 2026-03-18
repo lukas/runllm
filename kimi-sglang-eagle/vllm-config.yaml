@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: sglang-kimi
+  name: sglang-kimi-eagle
 spec:
   restartPolicy: Always
   hostIPC: true
@@ -35,10 +35,15 @@ spec:
             --port 8000 \
             --tp-size 8 \
             --context-length 8192 \
-            --mem-fraction-static 0.9 \
+            --mem-fraction-static 0.75 \
             --reasoning-parser kimi_k2 \
             --tool-call-parser kimi_k2 \
-            --trust-remote-code
+            --trust-remote-code \
+            --speculative-algorithm EAGLE3 \
+            --speculative-draft-model-path lightseekorg/kimi-k2.5-eagle3 \
+            --speculative-num-steps 3 \
+            --speculative-eagle-topk 1 \
+            --speculative-num-draft-tokens 4
       resources:
         limits:
           nvidia.com/gpu: 8
