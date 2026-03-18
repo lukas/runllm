@@ -29,7 +29,7 @@ spec:
             --enable-auto-tool-choice \
             --max-model-len 8192 \
             --gpu-memory-utilization 0.9 \
-            --download-dir /mnt/tensorized/hf-cache \
+            --download-dir /mnt/models/hf-cache \
             --served-model-name moonshotai/Kimi-K2.5
       resources:
         limits:
@@ -37,14 +37,14 @@ spec:
       ports:
         - containerPort: 8000
       volumeMounts:
-        - name: tensorized
-          mountPath: /mnt/tensorized
+        - name: models
+          mountPath: /mnt/models
         - name: workspace
           mountPath: /workspace
   volumes:
-    - name: tensorized
+    - name: models
       persistentVolumeClaim:
-        claimName: tensorized-models
+        claimName: models
     - name: workspace
       persistentVolumeClaim:
         claimName: cuda-workspace

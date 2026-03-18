@@ -1,12 +1,12 @@
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: tensorized-models
+  name: models
 spec:
   accessModes:
     - ReadWriteMany
   storageClassName: shared-vast
-  volumeName: pvc-b12feefc-d996-436d-b8b2-8e0fbb9cd38a
+  volumeName: pvc-389599c1-e2c8-4f33-953e-4b85362027b9
   resources:
     requests:
-      storage: 1Ti
+      storage: 5000Gi

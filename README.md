@@ -6,11 +6,12 @@ Run vLLM models on Kubernetes. Each model has a self-contained subdirectory.
 
 ```
 runllm/
-  qwen2.5-1.5b/    Qwen2.5-1.5B-Instruct (1× GPU)
-  qwen2.5-1.5b-sglang/ Qwen2.5-1.5B-Instruct on SGLang (1× GPU)
-  qwen3-235b/       Qwen3-235B-A22B MoE (4× GPU)
-  kimi-vllm/         Kimi-K2.5 on vLLM (8× GPU)
-  kimi-sglang/       Kimi-K2.5 on SGLang (8× GPU)
+  qwen2.5-1.5b/         Qwen2.5-1.5B-Instruct (1× GPU)
+  qwen2.5-1.5b-sglang/  Qwen2.5-1.5B-Instruct on SGLang (1× GPU)
+  qwen3-235b/            Qwen3-235B-A22B MoE (4× GPU)
+  kimi-vllm/             Kimi-K2.5 on vLLM (8× GPU)
+  kimi-sglang/           Kimi-K2.5 on SGLang (8× GPU)
+  kimi-sglang-eagle/     Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU)
 ```
 
 Each directory contains:
@@ -53,6 +54,11 @@ cd kimi-sglang
 make start                    # Deploy Kimi-K2.5 on SGLang (8× GPU)
 ```
 
+```bash
+cd kimi-sglang-eagle
+make start                    # Deploy Kimi-K2.5 on SGLang + EAGLE-3 (8× GPU)
+```
+
 ## Commands (same in every model directory)
 
 | Command | Description |
@@ -66,32 +72,34 @@ make start                    # Deploy Kimi-K2.5 on SGLang (8× GPU)
 
 ## SGLang variant
 
-`qwen2.5-1.5b-sglang/` and `kimi-sglang/` keep the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so they can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
+`qwen2.5-1.5b-sglang/`, `kimi-sglang/`, and `kimi-sglang-eagle/` keep the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so they can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
 
-For sweeps, `autollm` treats explicit backend directories as sibling variants of the same model family. For example, a Kimi family sweep can compare `kimi-vllm/` and `kimi-sglang/` in the same improve loop, and a Qwen 1.5B family sweep can compare `qwen2.5-1.5b/` and `qwen2.5-1.5b-sglang/`.
+For sweeps, `autollm` treats explicit backend directories as sibling variants of the same model family. For example, a Kimi family sweep can compare `kimi-vllm/`, `kimi-sglang/`, and `kimi-sglang-eagle/` in the same improve loop, and a Qwen 1.5B family sweep can compare `qwen2.5-1.5b/` and `qwen2.5-1.5b-sglang/`.
 
 `kimi-sglang/query.py` now treats non-JSON responses as a query-path bug and prints the raw server response before exiting. This makes broken port-forwards or unhealthy API responses much easier to diagnose than a bare JSON decode failure.
 
 ## Model loading
 
-Large models generally use [Tensorizer](https://github.com/coreweave/tensorizer) to pre-serialize weights to a shared PVC (`tensorized-models`). This cuts startup time dramatically — loading pre-serialized tensors from local NVMe is much faster than downloading safetensors from HuggingFace Hub on every pod start.
+Large models generally use [Tensorizer](https://github.com/coreweave/tensorizer) to pre-serialize weights to a shared PVC (`models`, 5Ti). This cuts startup time dramatically — loading pre-serialized tensors from local NVMe is much faster than downloading safetensors from HuggingFace Hub on every pod start.
 
 **One-time setup:** Run the serialize job to write tensors to the PVC:
 
 ```bash
-kubectl apply -f tensorized-models-pvc.yaml       # create PVC (once)
+kubectl apply -f models-pvc.yaml                   # create PVC (once)
 kubectl apply -f qwen3-235b/serialize-job.yaml     # serialize model weights
 ```
 
-The job downloads the model from HF, serializes it with tensor-parallel sharding, and writes the result to `/mnt/tensorized/`. Subsequent pod starts mount that PVC read-only and pass `--load-format tensorizer` to vLLM.
+The job downloads the model from HF, serializes it with tensor-parallel sharding, and writes the result to `/mnt/models/`. Subsequent pod starts mount that PVC read-only and pass `--load-format tensorizer` to vLLM.
 
 ### Kimi-K2.5 exception
 
-`kimi-vllm/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/tensorized/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working vLLM deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
+`kimi-vllm/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/models/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working vLLM deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
+
+`kimi-sglang-eagle/` serves Kimi-K2.5 on SGLang with EAGLE-3 speculative decoding using `lightseekorg/kimi-k2.5-eagle3` as the draft model. Both the main model and draft model are cached on the PVC via `HF_HOME=/mnt/models/hf-cache`.
 
 Operational implications:
 - Kimi startup is slower than the tensorized Qwen paths.
-- The shared PVC still matters because it caches the HF safetensors under `/mnt/tensorized/hf-cache`.
+- The shared PVC still matters because it caches the HF safetensors under `/mnt/models/hf-cache`.
 - Benchmarks and sample queries must allow the Kimi tokenizer/processor custom code (`trust_remote_code=True`) to match the serving path.
 
 ### Runtime patches for tensorized MoE models

@@ -24,7 +24,7 @@ spec:
               key: token
               optional: true
         - name: HF_HOME
-          value: /mnt/tensorized/hf-cache
+          value: /mnt/models/hf-cache
       command: ["/bin/bash", "-lc"]
       args:
         - |
@@ -45,9 +45,9 @@ spec:
       ports:
         - containerPort: 8000
       volumeMounts:
-        - name: tensorized
-          mountPath: /mnt/tensorized
+        - name: models
+          mountPath: /mnt/models
   volumes:
-    - name: tensorized
+    - name: models
       persistentVolumeClaim:
-        claimName: tensorized-models
+        claimName: models

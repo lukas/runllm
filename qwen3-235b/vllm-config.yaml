@@ -63,9 +63,9 @@ spec:
           " "$LFILE"
 
           exec vllm serve \
-            /mnt/tensorized/vllm/Qwen/Qwen3-235B-A22B/v1 \
+            /mnt/models/vllm/Qwen/Qwen3-235B-A22B/v1 \
             --load-format tensorizer \
-            --model-loader-extra-config '{"tensorizer_uri": "/mnt/tensorized/vllm/Qwen/Qwen3-235B-A22B/v1/model-rank-%03d.tensors"}' \
+            --model-loader-extra-config '{"tensorizer_uri": "/mnt/models/vllm/Qwen/Qwen3-235B-A22B/v1/model-rank-%03d.tensors"}' \
             --tensor-parallel-size 4 \
             --max-model-len 8192 \
             --gpu-memory-utilization 0.95 \
@@ -80,10 +80,10 @@ spec:
       ports:
         - containerPort: 8000
       volumeMounts:
-        - name: tensorized
-          mountPath: /mnt/tensorized
+        - name: models
+          mountPath: /mnt/models
           readOnly: true
   volumes:
-    - name: tensorized
+    - name: models
       persistentVolumeClaim:
-        claimName: tensorized-models
+        claimName: models
