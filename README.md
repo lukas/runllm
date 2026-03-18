@@ -11,7 +11,7 @@ runllm/
   qwen3-235b/            Qwen3-235B-A22B MoE (4× GPU)
   kimi-vllm/             Kimi-K2.5 on vLLM (8× GPU)
   kimi-sglang/           Kimi-K2.5 on SGLang (8× GPU)
-  kimi-sglang-eagle/     Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU)
+  kimi-sglang-eagle/     Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU) ⚠ see note below
   kimi-trt/              Kimi-K2.5 on TensorRT-LLM (8× GPU)
 ```
 
@@ -101,10 +101,16 @@ The job downloads the model from HF, serializes it with tensor-parallel sharding
 
 `kimi-vllm/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/models/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working vLLM deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
 
-`kimi-sglang-eagle/` serves Kimi-K2.5 on SGLang with EAGLE-3 speculative decoding using `lightseekorg/kimi-k2.5-eagle3` as the draft model. Both the main model and draft model are cached on the PVC via `HF_HOME=/mnt/models/hf-cache`.
+`kimi-sglang-eagle/` is configured for Kimi-K2.5 on SGLang with EAGLE-3 speculative decoding using `lightseekorg/kimi-k2.5-eagle3` as the draft model. Both the main model and draft model are cached on the PVC via `HF_HOME=/mnt/models/hf-cache`.
+
+**EAGLE-3 status (March 2026):** EAGLE-3 is **not yet supported** for `KimiK25ForConditionalGeneration` in SGLang v0.5.9 (`lmsysorg/sglang:latest`). The pod crashes with `AttributeError: 'KimiK25ForConditionalGeneration' object has no attribute 'set_eagle3_layers_to_capture'`. EAGLE-3 works for Llama and Qwen models. This variant is kept for when SGLang adds Kimi-K2.5 EAGLE-3 support.
+
+### Multithreaded safetensors loading
+
+SGLang variants (`kimi-sglang/`, `kimi-sglang-eagle/`) use `--load-format safetensors` with `--model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}'` for 8-thread parallel weight loading. This reduces Kimi-K2.5 loading from ~35 min to ~4 min on NFS-backed PVCs. Added in SGLang v0.5.8+.
 
 Operational implications:
-- Kimi startup is slower than the tensorized Qwen paths.
+- With multithreaded loading, Kimi startup is comparable to tensorized Qwen paths (~4 min vs ~12s, but much better than the previous 35 min).
 - The shared PVC still matters because it caches the HF safetensors under `/mnt/models/hf-cache`.
 - Benchmarks and sample queries must allow the Kimi tokenizer/processor custom code (`trust_remote_code=True`) to match the serving path.
 

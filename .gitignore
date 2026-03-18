@@ -1,3 +1,4 @@
 *.kubeconfig
 *.Kubeconfig
 .env
+__pycache__/
