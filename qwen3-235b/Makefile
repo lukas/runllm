@@ -8,7 +8,7 @@ KUBECONFIG ?= $(CURDIR)/../../kubeconfig
 export KUBECONFIG
 
 VLLM_POD ?= vllm-qwen3-235b
-VLLM_YAML ?= vllm-config.yaml
+POD_YAML ?= pod.yaml
 VLLM_MODEL ?= Qwen/Qwen3-235B-A22B
 
 .PHONY: apply delete-pod forward start query test help tensorize tensorize-status
@@ -19,7 +19,7 @@ delete-pod:
 	@sleep 2
 
 apply: delete-pod
-	kubectl apply -f $(VLLM_YAML)
+	kubectl apply -f $(POD_YAML)
 
 forward:
 	@echo "Forwarding localhost:8000 -> $(VLLM_POD):8000"
@@ -82,4 +82,4 @@ help:
 	@echo "  make apply     - Deploy pod only"
 	@echo "  make forward   - Port-forward only"
 	@echo ""
-	@echo "Config: VLLM_YAML=$(VLLM_YAML), VLLM_MODEL=$(VLLM_MODEL)"
+	@echo "Config: VLLM_YAML=$(POD_YAML), VLLM_MODEL=$(VLLM_MODEL)"

@@ -1,4 +1,4 @@
-# runllm/kimi-vllm — Kimi-K2.5 on vLLM (8× GPU)
+# runllm/kimi-trt — Kimi-K2.5 on TensorRT-LLM (8× GPU)
 # Usage: make start | query | test
 
 -include ../../.env
@@ -7,11 +7,11 @@
 KUBECONFIG ?= $(CURDIR)/../../kubeconfig
 export KUBECONFIG
 
-VLLM_POD ?= vllm-kimi
+VLLM_POD ?= trtllm-kimi
 POD_YAML ?= pod.yaml
 VLLM_MODEL ?= moonshotai/Kimi-K2.5
 
-.PHONY: apply delete-pod forward start query test help tensorize tensorize-status
+.PHONY: apply delete-pod forward start query test help
 
 delete-pod:
 	kubectl delete pod $(VLLM_POD) --ignore-not-found=true
@@ -29,23 +29,23 @@ forward:
 start: apply
 	@echo "Waiting for pod Ready..."
 	@kubectl wait --for=condition=Ready pod/$(VLLM_POD) --timeout=600s 2>/dev/null || true
-	@echo "Waiting for vLLM to listen (large model — may take 5-10 min)..."
+	@echo "Waiting for TensorRT-LLM to listen (large model — may take 10-15 min for engine build)..."
 	@echo "Streaming pod logs while waiting..."
 	@kubectl logs -f $(VLLM_POD) --tail=5 2>/dev/null &\
 	LOGPID=$$!; \
-	for i in $$(seq 1 300); do \
+	for i in $$(seq 1 600); do \
 		kubectl exec $(VLLM_POD) -- curl -sf http://localhost:8000/health >/dev/null 2>&1 && break; \
-		[ $$i -eq 300 ] && { kill $$LOGPID 2>/dev/null; echo "Timeout after 10 min."; exit 1; }; \
+		[ $$i -eq 600 ] && { kill $$LOGPID 2>/dev/null; echo "Timeout after 20 min."; exit 1; }; \
 		sleep 2; \
 	done; \
 	kill $$LOGPID 2>/dev/null || true; \
 	wait $$LOGPID 2>/dev/null || true
 	@echo ""
-	@echo "vLLM is healthy."
-	@echo "Running sample query (60s timeout)..."
+	@echo "TensorRT-LLM is healthy."
+	@echo "Running sample query (120s timeout)..."
 	@payload='{"model":"$(VLLM_MODEL)","messages":[{"role":"user","content":"Say hi"}],"max_tokens":16}'; \
 	kubectl exec $(VLLM_POD) -- curl -sf -X POST http://localhost:8000/v1/chat/completions \
-		-H "Content-Type: application/json" -d "$$payload" --max-time 60 >/dev/null || \
+		-H "Content-Type: application/json" -d "$$payload" --max-time 120 >/dev/null || \
 		{ echo "Sample query failed, hung, or timed out"; exit 1; }
 	@echo "Sample query OK"
 	@pkill -f "kubectl port-forward $(VLLM_POD)" 2>/dev/null || true
@@ -62,19 +62,8 @@ query:
 test:
 	@MODEL="$(VLLM_MODEL)" ./test_smoke.sh
 
-tensorize:
-	kubectl delete job tensorize-kimi-k25 --ignore-not-found=true
-	kubectl apply -f serialize-job.yaml
-	@echo "Serialization job started. Monitor with: make tensorize-status"
-	@echo "Or: kubectl logs -f job/tensorize-kimi-k25"
-
-tensorize-status:
-	@kubectl get job tensorize-kimi-k25 -o wide 2>/dev/null || echo "Job not found"
-	@echo "---"
-	@kubectl logs job/tensorize-kimi-k25 --tail=20 2>/dev/null || true
-
 help:
-	@echo "runllm/kimi-vllm — Kimi-K2.5 on vLLM (8× GPU)"
+	@echo "runllm/kimi-trt — Kimi-K2.5 on TensorRT-LLM (8× GPU)"
 	@echo ""
 	@echo "  make start     - Deploy + port-forward"
 	@echo "  make query     - Send chat completion (PROMPT=\"...\" required)"

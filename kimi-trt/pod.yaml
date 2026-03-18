@@ -1,0 +1,49 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: trtllm-kimi
+spec:
+  restartPolicy: Always
+  hostIPC: true
+  nodeSelector:
+    compute.coreweave.com/node-pool: lukas-4h200-pool
+  containers:
+    - name: trtllm
+      image: nvcr.io/nvidia/tensorrt-llm/release:0.18.0
+      env:
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+        - name: HF_HOME
+          value: /mnt/models/hf-cache
+      command: ["/bin/bash", "-c"]
+      args:
+        - |
+          set -e
+          exec trtllm-serve serve moonshotai/Kimi-K2.5 \
+            --backend pytorch \
+            --tp_size 8 \
+            --host 0.0.0.0 \
+            --port 8000 \
+            --max_batch_size 64 \
+            --max_input_len 8192 \
+            --max_output_len 4096
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+      ports:
+        - containerPort: 8000
+      volumeMounts:
+        - name: models
+          mountPath: /mnt/models
+        - name: workspace
+          mountPath: /workspace
+  volumes:
+    - name: models
+      persistentVolumeClaim:
+        claimName: models
+    - name: workspace
+      persistentVolumeClaim:
+        claimName: cuda-workspace

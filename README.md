@@ -12,10 +12,11 @@ runllm/
   kimi-vllm/             Kimi-K2.5 on vLLM (8× GPU)
   kimi-sglang/           Kimi-K2.5 on SGLang (8× GPU)
   kimi-sglang-eagle/     Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU)
+  kimi-trt/              Kimi-K2.5 on TensorRT-LLM (8× GPU)
 ```
 
 Each directory contains:
-- `vllm-config.yaml` — K8s Pod spec
+- `pod.yaml` — K8s Pod spec
 - `Makefile` — deploy, port-forward, query, test
 - `query.py` — send chat completion requests
 - `test_smoke.sh` — smoke test
@@ -59,6 +60,11 @@ cd kimi-sglang-eagle
 make start                    # Deploy Kimi-K2.5 on SGLang + EAGLE-3 (8× GPU)
 ```
 
+```bash
+cd kimi-trt
+make start                    # Deploy Kimi-K2.5 on TensorRT-LLM (8× GPU)
+```
+
 ## Commands (same in every model directory)
 
 | Command | Description |
@@ -72,7 +78,7 @@ make start                    # Deploy Kimi-K2.5 on SGLang + EAGLE-3 (8× GPU)
 
 ## SGLang variant
 
-`qwen2.5-1.5b-sglang/`, `kimi-sglang/`, and `kimi-sglang-eagle/` keep the same `runllm` surface (`vllm-config.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so they can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
+`qwen2.5-1.5b-sglang/`, `kimi-sglang/`, and `kimi-sglang-eagle/` keep the same `runllm` surface (`pod.yaml`, `Makefile`, `query.py`, `test_smoke.sh`) so they can be used like the vLLM model dirs, but the pod launches `sglang serve` instead of `vllm serve`.
 
 For sweeps, `autollm` treats explicit backend directories as sibling variants of the same model family. For example, a Kimi family sweep can compare `kimi-vllm/`, `kimi-sglang/`, and `kimi-sglang-eagle/` in the same improve loop, and a Qwen 1.5B family sweep can compare `qwen2.5-1.5b/` and `qwen2.5-1.5b-sglang/`.
 
@@ -104,7 +110,7 @@ Operational implications:
 
 ### Runtime patches for tensorized MoE models
 
-The latest vLLM nightly has two bugs that break tensorizer loading for Mixture-of-Experts models. The `vllm-config.yaml` for affected tensorized models (for example `qwen3-235b/`) applies two inline patches at container startup:
+The latest vLLM nightly has two bugs that break tensorizer loading for Mixture-of-Experts models. The `pod.yaml` for affected tensorized models (for example `qwen3-235b/`) applies two inline patches at container startup:
 
 1. **Patch 1 — MetaTensorMode factory ops** (vllm#25751): vLLM's `MetaTensorMode` only intercepts `aten::empty`, but MoE layers use other tensor factory ops (`aten::zeros`, `aten::ones`, `aten::full`, etc.). Without this patch, model initialization crashes because those ops try to allocate on the wrong device. The patch expands the intercept list to 18 factory ops.
 
@@ -115,7 +121,7 @@ These patches are applied via `sed`/`python3` at startup and are idempotent (saf
 ## Adding a new model
 
 1. Create a new directory: `mkdir runllm/my-model`
-2. Add `vllm-config.yaml` with the K8s Pod spec (set `metadata.name`, model args, GPU count)
+2. Add `pod.yaml` with the K8s Pod spec (set `metadata.name`, model args, GPU count)
 3. Copy `Makefile`, `query.py`, `test_smoke.sh` from an existing model dir
 4. Update Makefile defaults: `VLLM_POD`, `VLLM_MODEL`
 5. Test: `cd runllm/my-model && make start`

@@ -1,0 +1,70 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: tensorize-kimi-sglang
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      hostIPC: true
+      nodeSelector:
+        compute.coreweave.com/node-pool: lukas-4h200-pool
+      containers:
+        - name: tensorize
+          image: lbiewald/sglang-tensorizer:latest
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+            - name: HUGGING_FACE_HUB_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-token
+                  key: token
+                  optional: true
+            - name: HF_HOME
+              value: /mnt/models/hf-cache
+            - name: SGLANG_TENSORIZE_OUTPUT_DIR
+              value: /mnt/models/sglang/moonshotai/Kimi-K2.5/v1
+            - name: SGLANG_TENSORIZE_AND_EXIT
+              value: "1"
+          command: ["/bin/bash", "-lc"]
+          args:
+            - |
+              set -e
+              OUTPUT_DIR="/mnt/models/sglang/moonshotai/Kimi-K2.5/v1"
+              if [ -f "$OUTPUT_DIR/model-rank-000.tensors" ]; then
+                echo "Tensorized model already exists at $OUTPUT_DIR — skipping."
+                echo "Delete the directory to re-serialize."
+                exit 0
+              fi
+              echo "Starting Kimi-K2.5 serialization to $OUTPUT_DIR ..."
+              echo "This loads the model normally from HF cache, then serializes to tensorizer format."
+              echo "Expected time: ~10-15 min (HF load) + ~1-2 min (serialize)"
+              mkdir -p "$OUTPUT_DIR"
+              exec sglang serve \
+                --model-path moonshotai/Kimi-K2.5 \
+                --served-model-name moonshotai/Kimi-K2.5 \
+                --host 0.0.0.0 \
+                --port 8000 \
+                --tp-size 8 \
+                --context-length 8192 \
+                --mem-fraction-static 0.9 \
+                --reasoning-parser kimi_k2 \
+                --tool-call-parser kimi_k2 \
+                --trust-remote-code
+          resources:
+            limits:
+              nvidia.com/gpu: 8
+          volumeMounts:
+            - name: models
+              mountPath: /mnt/models
+      volumes:
+        - name: models
+          persistentVolumeClaim:
+            claimName: models

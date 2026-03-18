@@ -1,4 +1,5 @@
-# runllm/kimi-sglang-eagle — Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU)
+# runllm/kimi-sglang-tensorizer — Kimi-K2.5 on SGLang with tensorizer (8× GPU)
+# Requires one-time serialization: make tensorize
 # Usage: make start | query | test
 
 -include ../../.env
@@ -7,11 +8,11 @@
 KUBECONFIG ?= $(CURDIR)/../../kubeconfig
 export KUBECONFIG
 
-VLLM_POD ?= sglang-kimi-eagle
+VLLM_POD ?= sglang-kimi-tensorizer
 POD_YAML ?= pod.yaml
 VLLM_MODEL ?= moonshotai/Kimi-K2.5
 
-.PHONY: apply delete-pod forward start query test help
+.PHONY: apply delete-pod forward start query test help tensorize tensorize-status build-image push-image
 
 delete-pod:
 	kubectl delete pod $(VLLM_POD) --ignore-not-found=true
@@ -29,7 +30,7 @@ forward:
 start: apply
 	@echo "Waiting for pod Ready..."
 	@kubectl wait --for=condition=Ready pod/$(VLLM_POD) --timeout=900s 2>/dev/null || true
-	@echo "Waiting for SGLang to answer on /model_info (large model — may take 10-15 min)..."
+	@echo "Waiting for SGLang to answer on /model_info (tensorizer load should be fast)..."
 	@pkill -f "kubectl port-forward $(VLLM_POD) 8000:8000" 2>/dev/null || true
 	@kubectl port-forward $(VLLM_POD) 8000:8000 </dev/null >/dev/null 2>&1 & \
 	PF_PID=$$!; \
@@ -60,9 +61,36 @@ query:
 test:
 	@MODEL="$(VLLM_MODEL)" bash ./test_smoke.sh
 
+# --- Docker image ---
+build-image:
+	@echo "Building lbiewald/sglang-tensorizer:latest ..."
+	cd ../../sglang && docker build -f Dockerfile.tensorizer -t lbiewald/sglang-tensorizer:latest .
+
+push-image: build-image
+	docker push lbiewald/sglang-tensorizer:latest
+
+# --- Serialization ---
+tensorize:
+	kubectl delete job tensorize-kimi-sglang --ignore-not-found=true
+	kubectl apply -f serialize-job.yaml
+	@echo "Serialization job started. Monitor with: make tensorize-status"
+	@echo "Or: kubectl logs -f job/tensorize-kimi-sglang"
+
+tensorize-status:
+	@kubectl get job tensorize-kimi-sglang -o wide 2>/dev/null || echo "Job not found"
+	@echo "---"
+	@kubectl logs job/tensorize-kimi-sglang --tail=20 2>/dev/null || true
+
 help:
-	@echo "runllm/kimi-sglang-eagle — Kimi-K2.5 on SGLang + EAGLE-3 (8× GPU)"
+	@echo "runllm/kimi-sglang-tensorizer — Kimi-K2.5 on SGLang + Tensorizer (8× GPU)"
 	@echo ""
+	@echo "  SETUP (one-time):"
+	@echo "  make build-image  - Build Docker image with tensorizer patches"
+	@echo "  make push-image   - Build + push to DockerHub (lbiewald/sglang-tensorizer)"
+	@echo "  make tensorize    - Serialize Kimi weights to tensorizer format (K8s Job)"
+	@echo "  make tensorize-status - Check serialization progress"
+	@echo ""
+	@echo "  SERVING:"
 	@echo "  make start     - Deploy + port-forward"
 	@echo "  make query     - Send chat completion (PROMPT=\"...\" required)"
 	@echo "  make test      - Smoke test (requires port-forward)"
