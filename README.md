@@ -11,7 +11,7 @@ runllm/
   qwen3-235b/            Qwen3-235B-A22B MoE (4× GPU)
   kimi-vllm/             Kimi-K2.5 on vLLM (8× GPU)
   kimi-sglang/           Kimi-K2.5 on SGLang (8× GPU)
-  kimi-sglang-eagle/     Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU) ⚠ see note below
+  kimi-sglang-eagle/     Kimi-K2.5 on SGLang + EAGLE-3 speculative decoding (8× GPU)
   kimi-trt/              Kimi-K2.5 on TensorRT-LLM (8× GPU)
 ```
 
@@ -101,9 +101,9 @@ The job downloads the model from HF, serializes it with tensor-parallel sharding
 
 `kimi-vllm/` currently uses standard HuggingFace safetensors loading with `--download-dir /mnt/models/hf-cache` and `--trust-remote-code`, not tensorizer. This is the currently working vLLM deploy path for Kimi-K2.5 because the tensorized path hit multiple incompatibilities with its multimodal + quantized model stack.
 
-`kimi-sglang-eagle/` is configured for Kimi-K2.5 on SGLang with EAGLE-3 speculative decoding using `lightseekorg/kimi-k2.5-eagle3` as the draft model. Both the main model and draft model are cached on the PVC via `HF_HOME=/mnt/models/hf-cache`.
+`kimi-sglang-eagle/` serves Kimi-K2.5 on SGLang with EAGLE-3 speculative decoding using `lightseekorg/kimi-k2.5-eagle3` as the draft model. Both the main model and draft model are cached on the PVC via `HF_HOME=/mnt/models/hf-cache`.
 
-**EAGLE-3 status (March 2026):** EAGLE-3 is **not yet supported** for `KimiK25ForConditionalGeneration` in SGLang v0.5.9 (`lmsysorg/sglang:latest`). The pod crashes with `AttributeError: 'KimiK25ForConditionalGeneration' object has no attribute 'set_eagle3_layers_to_capture'`. EAGLE-3 works for Llama and Qwen models. This variant is kept for when SGLang adds Kimi-K2.5 EAGLE-3 support.
+**EAGLE-3 runtime patch (SGLang v0.5.9):** SGLang v0.5.9 has `set_eagle3_layers_to_capture` on the inner `DeepseekV3ForCausalLM` but not on the outer `KimiK25ForConditionalGeneration` wrapper. The `pod.yaml` applies a startup patch that adds the delegation methods (backported from SGLang main). This patch is idempotent and should be removed when upgrading past v0.5.9. Tested: EAGLE-3 accept rate ~2.6 tokens/step (65% acceptance rate).
 
 ### Multithreaded safetensors loading
 
@@ -127,9 +127,9 @@ These patches are applied via `sed`/`python3` at startup and are idempotent (saf
 ## Adding a new model
 
 1. Create a new directory: `mkdir runllm/my-model`
-2. Add `pod.yaml` with the K8s Pod spec (set `metadata.name`, model args, GPU count)
+2. Add `pod.yaml` with the K8s Pod spec (set `metadata.name`, model args, GPU count). **Must mount the `models` PVC** for weight caching.
 3. Copy `Makefile`, `query.py`, `test_smoke.sh` from an existing model dir
-4. Update Makefile defaults: `VLLM_POD`, `VLLM_MODEL`
+4. Update Makefile defaults: `VLLM_POD`, `VLLM_MODEL`, `POD_YAML`
 5. Test: `cd runllm/my-model && make start`
 
 ## Used by autollm
