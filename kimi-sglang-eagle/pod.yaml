@@ -28,6 +28,32 @@ spec:
       command: ["/bin/bash", "-lc"]
       args:
         - |
+          python3 << 'EAGLE_PATCH'
+          import sglang.srt.models.kimi_k25 as m
+          src = m.__file__
+          with open(src) as f:
+              code = f.read()
+          if "set_eagle3_layers_to_capture" not in code:
+              patch = '''
+          # --- EAGLE3 patch (backport from SGLang main, remove when upgrading past v0.5.9) ---
+          _orig_cls = KimiK25ForConditionalGeneration
+          def _set_eagle3_layers_to_capture(self, layer_ids=None):
+              self.language_model.set_eagle3_layers_to_capture(layer_ids)
+          _orig_cls.set_eagle3_layers_to_capture = _set_eagle3_layers_to_capture
+          def _get_embed_and_head(self):
+              return self.language_model.get_embed_and_head()
+          _orig_cls.get_embed_and_head = _get_embed_and_head
+          def _set_embed_and_head(self, embed, head):
+              self.language_model.set_embed_and_head(embed, head)
+          _orig_cls.set_embed_and_head = _set_embed_and_head
+          '''
+              import textwrap
+              with open(src, "a") as f:
+                  f.write(textwrap.dedent(patch))
+              print(f"Patched {src} with EAGLE3 support")
+          else:
+              print(f"EAGLE3 support already present in {src}")
+          EAGLE_PATCH
           exec sglang serve \
             --model-path moonshotai/Kimi-K2.5 \
             --served-model-name moonshotai/Kimi-K2.5 \
