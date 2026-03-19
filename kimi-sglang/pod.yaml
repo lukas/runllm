@@ -40,7 +40,8 @@ spec:
             --tool-call-parser kimi_k2 \
             --trust-remote-code \
             --load-format safetensors \
-            --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}'
+            --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}' \
+            --enable-metrics
       resources:
         limits:
           nvidia.com/gpu: 8

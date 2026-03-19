@@ -40,7 +40,8 @@ spec:
             --tool-call-parser kimi_k2 \
             --trust-remote-code \
             --load-format tensorizer \
-            --model-loader-extra-config '{"tensorizer_uri": "/mnt/models/sglang/moonshotai/Kimi-K2.5/v1/model-rank-%03d.tensors"}'
+            --model-loader-extra-config '{"tensorizer_uri": "/mnt/models/sglang/moonshotai/Kimi-K2.5/v1/model-rank-%03d.tensors"}' \
+            --enable-metrics
       resources:
         limits:
           nvidia.com/gpu: 8

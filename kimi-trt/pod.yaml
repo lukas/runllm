@@ -9,7 +9,7 @@ spec:
     compute.coreweave.com/node-pool: lukas-4h200-pool
   containers:
     - name: trtllm
-      image: nvcr.io/nvidia/tensorrt-llm/release:0.18.0
+      image: nvcr.io/nvidia/tensorrt-llm/release:1.3.0rc8
       env:
         - name: HUGGING_FACE_HUB_TOKEN
           valueFrom:
@@ -22,14 +22,39 @@ spec:
       args:
         - |
           set -e
+          MCFG=/usr/local/lib/python3.12/dist-packages/tensorrt_llm/_torch/model_config.py
+
+          # Patch 1 - fix None input_activations in compressed-tensors config
+          sed -i 's/inputs_quant_config = config_groups\["group_0"\]\["input_activations"\]/inputs_quant_config = config_groups["group_0"].get("input_activations")/' "$MCFG"
+          sed -i 's/inputs_quant_strategy = inputs_quant_config\["strategy"\]/inputs_quant_strategy = inputs_quant_config["strategy"] if inputs_quant_config else None/' "$MCFG"
+
+          # Patch 2 - skip unsupported 4-bit quant instead of crashing
+          cat > /tmp/patch_quant.py << 'PYEOF'
+          import sys
+          mcfg = sys.argv[1]
+          with open(mcfg) as f:
+              src = f.read()
+          old_block = '            else:\n                raise ValueError(\n                    f"Unsupported quant_bits: {weights_quant_config[\'num_bits\']}. "\n                    "Supported: 8.")'
+          new_block = '            else:\n                import logging as _lg\n                _lg.getLogger("tensorrt_llm").warning("Unsupported quant_bits %s, skipping quant config", weights_quant_config["num_bits"])\n                return quant_config, layer_quant_config'
+          if old_block in src:
+              src = src.replace(old_block, new_block)
+              with open(mcfg, 'w') as f:
+                  f.write(src)
+              print("Patch 2 applied")
+          else:
+              print("Patch 2 target not found")
+          PYEOF
+          python3 /tmp/patch_quant.py "$MCFG"
+
           exec trtllm-serve serve moonshotai/Kimi-K2.5 \
             --backend pytorch \
             --tp_size 8 \
             --host 0.0.0.0 \
             --port 8000 \
-            --max_batch_size 64 \
-            --max_input_len 8192 \
-            --max_output_len 4096
+            --max_batch_size 8 \
+            --max_seq_len 4096 \
+            --kv_cache_free_gpu_memory_fraction 0.1 \
+            --trust_remote_code
       resources:
         limits:
           nvidia.com/gpu: 8

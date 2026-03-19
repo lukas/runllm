@@ -32,7 +32,8 @@ spec:
             --port 8000 \
             --context-length 4096 \
             --mem-fraction-static 0.9 \
-            --dtype half
+            --dtype half \
+            --enable-metrics
       resources:
         limits:
           nvidia.com/gpu: 1
