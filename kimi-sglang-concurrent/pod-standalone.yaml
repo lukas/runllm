@@ -1,0 +1,108 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: sglang-kimi-serving
+  labels:
+    app: kimi-serving
+spec:
+  restartPolicy: Always
+  hostIPC: true
+  nodeSelector:
+    compute.coreweave.com/node-pool: lukas-4h200-pool
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                  - g14385c
+  containers:
+    - name: sglang
+      image: lmsysorg/sglang:latest
+      env:
+        - name: HF_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+              optional: true
+        - name: HUGGING_FACE_HUB_TOKEN
+          valueFrom:
+            secretKeyRef:
+              name: hf-token
+              key: token
+              optional: true
+        - name: HF_HOME
+          value: /mnt/models/hf-cache
+        - name: SGLANG_ENABLE_SPEC_V2
+          value: "True"
+        - name: SGLANG_ENABLE_TORCH_INFERENCE_MODE
+          value: "true"
+      command: ["/bin/bash", "-lc"]
+      args:
+        - |
+          python3 << 'EAGLE_PATCH'
+          import sglang.srt.models.kimi_k25 as m
+          src = m.__file__
+          with open(src) as f:
+              code = f.read()
+          if "set_eagle3_layers_to_capture" not in code:
+              patch = '''
+          # --- EAGLE3 patch (backport from SGLang main, remove when upgrading past v0.5.9) ---
+          _orig_cls = KimiK25ForConditionalGeneration
+          def _set_eagle3_layers_to_capture(self, layer_ids=None):
+              self.language_model.set_eagle3_layers_to_capture(layer_ids)
+          _orig_cls.set_eagle3_layers_to_capture = _set_eagle3_layers_to_capture
+          def _get_embed_and_head(self):
+              return self.language_model.get_embed_and_head()
+          _orig_cls.get_embed_and_head = _get_embed_and_head
+          def _set_embed_and_head(self, embed, head):
+              self.language_model.set_embed_and_head(embed, head)
+          _orig_cls.set_embed_and_head = _set_embed_and_head
+          '''
+              import textwrap
+              with open(src, "a") as f:
+                  f.write(textwrap.dedent(patch))
+              print(f"Patched {src} with EAGLE3 support")
+          else:
+              print(f"EAGLE3 support already present in {src}")
+          EAGLE_PATCH
+          exec sglang serve \
+            --model-path moonshotai/Kimi-K2.5 \
+            --served-model-name moonshotai/Kimi-K2.5 \
+            --host 0.0.0.0 \
+            --port 8000 \
+            --tp-size 8 \
+            --context-length 131072 \
+            --mem-fraction-static 0.90 \
+            --reasoning-parser kimi_k2 \
+            --tool-call-parser kimi_k2 \
+            --trust-remote-code \
+            --load-format safetensors \
+            --model-loader-extra-config '{"enable_multithread_load": true, "num_threads": 8}' \
+            --speculative-algorithm EAGLE3 \
+            --speculative-draft-model-path lightseekorg/kimi-k2.5-eagle3 \
+            --speculative-num-steps 4 \
+            --speculative-eagle-topk 1 \
+            --speculative-num-draft-tokens 5 \
+            --speculative-attention-mode decode \
+            --prefill-attention-backend fa3 \
+            --decode-attention-backend flashinfer \
+            --cuda-graph-max-bs 64 \
+            --enable-metrics \
+            --log-requests \
+            --api-key PstWHWA67OsdnSUOCReyq8Uv-3ZVdrURMgOW8ohvB2s
+      resources:
+        limits:
+          nvidia.com/gpu: 8
+      ports:
+        - containerPort: 8000
+      volumeMounts:
+        - name: models
+          mountPath: /mnt/models
+  volumes:
+    - name: models
+      persistentVolumeClaim:
+        claimName: models
